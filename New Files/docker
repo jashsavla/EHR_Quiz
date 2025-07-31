@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: examplepassword
+      POSTGRES_DB: research_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  backend:
+    build: ./backend
+    restart: always
+    ports:
+      - "5000:5000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:examplepassword@db:5432/research_db
+    depends_on:
+      - db
+    command: ["python", "app.py"]  # ✅ Ensure Flask runs the main app
+
+  frontend:
+    build: ./frontend
+    restart: always
+    depends_on:
+      - backend
+    command: ["npm", "run", "build"]  # ✅ Build React production build only once
+
+  nginx:
+    image: nginx:latest
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./frontend/build:/usr/share/nginx/html:ro
+    depends_on:
+      - frontend
+      - backend
+
+volumes:
+  pgdata:
+
+# ✅ Inspect volume: docker volume inspect <project>_pgdata
+# ✅ Backup: docker run --rm -v <project>_pgdata:/var/lib/postgresql/data -v $PWD:/backup busybox tar czvf /backup/backup.tar.gz /var/lib/postgresql/data
+# ✅ Restore: docker run --rm -v <project>_pgdata:/var/lib/postgresql/data -v $PWD:/backup busybox tar xzvf /backup/backup.tar.gz -C /
+# ✅ Save this as backup.sh:
+# #!/bin/bash
+# TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+# docker run --rm -v <project>_pgdata:/var/lib/postgresql/data -v $PWD:/backup busybox tar czvf /backup/pg_backup_$TIMESTAMP.tar.gz /var/lib/postgresql/data
+# echo "Backup saved as pg_backup_$TIMESTAMP.tar.gz"
